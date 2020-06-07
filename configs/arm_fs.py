@@ -20,6 +20,7 @@ import arm_sys
 from arm_sys import AtomicCluster, KvmCluster
 
 default_disk = 'linaro-minimal-aarch64.img'
+default_kernel = 'vmlinux.vexpress_gem5_v1_64'
 default_rcs = 'bootscript.rcS'
 default_mem_size= "8GB"
 
@@ -39,8 +40,9 @@ def _using_pdes(root):
     return False
 
 
-def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5",
+def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5_V1",
         disks=[], mem_size=default_mem_size, bootloader=None):
+
     platform = ObjectList.platform_list.get(machine_type)
     m5.util.inform("Simulated platform: %s", platform.__name__)
 
@@ -63,7 +65,7 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5",
         for dev in sys.pci_vio_block:
             sys.attach_pci(dev)
 
-    sys.realview.setupBootLoader(sys, SysPaths.binary, bootloader)
+    sys.realview.setupBootLoader(sys, SysPaths.binary)
 
     return sys
 
@@ -79,7 +81,7 @@ def addOptions(parser):
                         help="Restore from checkpoint")
     parser.add_argument("--dtb", type=str, default=None,
                         help="DTB file to load")
-    parser.add_argument("--kernel", type=str, required=True,
+    parser.add_argument("--kernel", type=str, default=default_kernel,
                         help="Linux kernel")
     parser.add_argument("--root", type=str, default="/dev/vda1",
                         help="Specify the kernel CLI root= argument")

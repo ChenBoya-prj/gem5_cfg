@@ -212,11 +212,8 @@ def simpleSystem(BaseSystem, caches, mem_size, platform=None, **kwargs):
                     AddrRange(start = mem_range.start, size = mem_size) ]
 
             self._caches = caches
-            if self._caches:
-                self.iocache = IOCache(addr_ranges=[self.mem_ranges[0]])
-            else:
-                self.dmabridge = Bridge(delay='50ns', 
-                                        ranges=[self.mem_ranges[0]])
+            self.dmabridge = Bridge(delay='50ns', 
+                    ranges=[self.mem_ranges[0]])
 
             self._clusters = []
             self._num_cpus = 0
@@ -227,13 +224,8 @@ def simpleSystem(BaseSystem, caches, mem_size, platform=None, **kwargs):
         def connect(self):
             self.iobridge.master = self.iobus.slave
             self.iobridge.slave = self.membus.master
-
-            if self._caches:
-                self.iocache.mem_side = self.membus.slave
-                self.iocache.cpu_side = self.iobus.master
-            else:
-                self.dmabridge.mem_side = self.membus.slave
-                self.dmabridge.cpu_side = self.iobus.master
+            self.dmabridge.master = self.membus.slave
+            self.dmabridge.slave = self.iobus.master
 
             if hasattr(self.realview.gic, 'cpu_addr'):
                 self.gic_cpu_addr = self.realview.gic.cpu_addr
