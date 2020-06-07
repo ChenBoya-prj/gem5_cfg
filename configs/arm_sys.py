@@ -7,6 +7,7 @@ import six
 import m5
 from m5.objects import *
 m5.util.addToPath('../')
+m5.util.addToPath(os.environ['GEM5_PATH']+'/configs/')
 from common.Caches import *
 from common import ObjectList
 
@@ -95,29 +96,29 @@ class MemBus(SystemXBar):
     default = Self.badaddr_responder.pio
 
 class CpuCluster(SubSystem):
-    def __init__(self, system, num_cpus, cpu_clock, cpu_voltage,
-            cpu_type, l1i_type, l1d_type, wcache_type, l2_type):
+    def __init__(self, system,  num_cpus, cpu_clock, cpu_voltage,
+                 cpu_type, l1i_type, l1d_type, wcache_type, l2_type):
         super(CpuCluster, self).__init__()
         self._cpu_type = cpu_type
         self._l1i_type = l1i_type
         self._l1d_type = l1d_type
         self._wcache_type = wcache_type
-        self._l2_type  = l2_type
+        self._l2_type = l2_type
 
         assert num_cpus > 0
 
-        self.voltage_domain = VoltageDomain(voltage = cpu_voltage)
-        self.clk_domain = SrcClockDomain(clock = cpu_clock, 
-                voltage_domain = self.voltage_domain)
-        self.cpus = [self._cpu_type(cpu_id = system.numCpus() + idx, 
-                clk_domain = self.clk_domain)
-                for idx in range(num_cpus) ]
+        self.voltage_domain = VoltageDomain(voltage=cpu_voltage)
+        self.clk_domain = SrcClockDomain(clock=cpu_clock,
+                                         voltage_domain=self.voltage_domain)
+
+        self.cpus = [ self._cpu_type(cpu_id=system.numCpus() + idx,
+                                     clk_domain=self.clk_domain)
+                      for idx in range(num_cpus) ]
 
         for cpu in self.cpus:
             cpu.createThreads()
             cpu.createInterruptController()
             cpu.socket_id = system.numCpuClusters()
-
         system.addCpuCluster(self, num_cpus)
 
     def requireCaches(self):
@@ -144,9 +145,9 @@ class CpuCluster(SubSystem):
             for isa in cpu.isa:
                 isa.pmu = ArmPMU(interrupt=int_cls(num=pint))
                 isa.pmu.addArchEvents(cpu=cpu, itb=cpu.itb, dtb=cpu.dtb,
-                        icache = getattr(cpu, 'icache', None),
-                        dcache = getattr(cpu, 'dcache', None),
-                        l2cache = getattr(cpu, 'l2cache', None))
+                                      icache=getattr(cpu, 'icache', None),
+                                      dcache=getattr(cpu, 'dcache', None),
+                                      l2cache=getattr(cpu, 'l2cache', None))
                 for ev in events:
                     isa.pmu.addEvent(ev)
 
@@ -181,10 +182,10 @@ def simpleSystem(BaseSystem, caches, mem_size, platform=None, **kwargs):
         def __init__(self, caches, mem_size, platform=None, **kwargs):
             super(SimpleSystem, self).__init__(**kwargs)
 
-            self.voltage_domain = VoltageDomain(voltage = "1.0V")
+            self.voltage_domain = VoltageDomain(voltage="1.0V")
             self.clk_domain = SrcClockDomain(
-                    clock = "1GHz",
-                    voltage_domain = Parent.voltage_domain)
+                clock="1GHz",
+                voltage_domain=Parent.voltage_domain)
 
             if platform is None:
                 self.realview = VExpress_GEM5_V1()
@@ -203,17 +204,16 @@ def simpleSystem(BaseSystem, caches, mem_size, platform=None, **kwargs):
 
             self.iobus = IOXBar()
 
-            self.iobridge  = Bridge(delay = '50ns')
+            self.iobridge = Bridge(delay='50ns')
 
             mem_range = self.realview._mem_regions[0]
             assert long(mem_range.size()) >= long(Addr(mem_size))
-
             self.mem_ranges = [
-                    AddrRange(start = mem_range.start, size = mem_size) ]
+                AddrRange(start=mem_range.start, size=mem_size) ]
 
             self._caches = caches
             self.dmabridge = Bridge(delay='50ns', 
-                    ranges=[self.mem_ranges[0]])
+                                    ranges=[self.mem_ranges[0]])
 
             self._clusters = []
             self._num_cpus = 0
@@ -273,4 +273,3 @@ def simpleSystem(BaseSystem, caches, mem_size, platform=None, **kwargs):
                 cluster.connectMemSide(cluster_mem_bus)
 
     return SimpleSystem(caches, mem_size, platform, **kwargs)
-

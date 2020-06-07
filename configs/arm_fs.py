@@ -65,7 +65,7 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5_V1",
         for dev in sys.pci_vio_block:
             sys.attach_pci(dev)
 
-    sys.realview.setupBootLoader(sys, SysPaths.binary)
+    sys.realview.setupBootLoader(sys, SysPaths.binary, bootloader)
 
     return sys
 
