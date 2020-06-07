@@ -5,6 +5,7 @@ from __future__ import absolute_import
 
 import argparse
 import os
+import sys
 import m5
 import m5.util
 from m5.objects import *
@@ -46,10 +47,9 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5_V1",
     platform = ObjectList.platform_list.get(machine_type)
     m5.util.inform("Simulated platform: %s", platform.__name__)
 
-    sys = arm_sys.simpleSystem(ArmSystem,
+    sys = arm_sys.simpleSystem(LinuxArmSystem,
                                caches, mem_size, platform(),
-                               workload=ArmFsLinux(
-                                   object_file=SysPaths.binary(kernel)),
+                               kernel=SysPaths.binary(kernel),
                                readfile=bootscript)
 
     sys.mem_ctrls = [ SimpleMemory(range=r, port=sys.membus.master)
@@ -168,9 +168,9 @@ def build(options):
 
     root.system = system
     if options.kernel_cmd:
-        system.workload.command_line = options.kernel_cmd
+        system.boot_osflags = options.kernel_cmd
     else:
-        system.workload.command_line = " ".join(kernel_cmd)
+        system.boot_osflags = " ".join(kernel_cmd)
 
     if options.big_cpus+options.little_cpus+options.mid_cpus ==0:
         m5.util.panic("Empty CPU clusters")
@@ -211,11 +211,10 @@ def build(options):
 
     # Linux device tree
     if options.dtb is not None:
-        system.workload.dtb_filename = SysPaths.binary(options.dtb)
+        system.dtb_filename = SysPaths.binary(options.dtb)
     else:
-        system.workload.dtb_filename = \
-            os.path.join(m5.options.outdir, 'system.dtb')
-        system.generateDtb(system.workload.dtb_filename)
+        system.generateDtb(m5.options.outdir, 'system.dtb')
+
 
     if options.vio_9p:
         FSConfig.attach_9p(system.realview, system.iobus)

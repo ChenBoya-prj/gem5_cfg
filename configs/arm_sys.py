@@ -2,8 +2,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-import six
-
 import m5
 from m5.objects import *
 m5.util.addToPath('../')
