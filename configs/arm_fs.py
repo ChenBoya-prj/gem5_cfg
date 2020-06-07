@@ -46,11 +46,15 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5_V1",
     platform = ObjectList.platform_list.get(machine_type)
     m5.util.inform("Simulated platform: %s", platform.__name__)
 
-    sys = arm_sys.simpleSystem(ArmSystem, caches, mem_size, platform(),
-                            workload=ArmFsLinux(object_file=SysPaths.binary(kernel)),
-                            readfile=bootscript)
-    sys.mem_ctrls = [ SimpleMemory(range = r, port=sys.membus.master)
-                        for r in sys.mem_ranges ]
+    sys = arm_sys.simpleSystem(ArmSystem,
+                               caches, mem_size, platform(),
+                               workload=ArmFsLinux(
+                                   object_file=SysPaths.binary(kernel)),
+                               readfile=bootscript)
+
+    sys.mem_ctrls = [ SimpleMemory(range=r, port=sys.membus.master)
+                      for r in sys.mem_ranges ]
+
     sys.connect()
 
     if disks:
@@ -139,26 +143,28 @@ def build(options):
     m5.ticks.fixGlobalFrequency()
 
     kernel_cmd = [
-            "earlyprintk=pl011,0x1c090000",
-            "console=ttyAMA0",
-            "lpj=19988480",
-            "norandmaps",
-            "loglevel=8",
-            "mem=%s" % options.mem_size,
-            "root=%s" % options.root,
-            "rw",
-            "init=%s" % options.kernel_init,
-            "vmalloc=768MB",
-            ]
+        "earlyprintk=pl011,0x1c090000",
+        "console=ttyAMA0",
+        "lpj=19988480",
+        "norandmaps",
+        "loglevel=8",
+        "mem=%s" % options.mem_size,
+        "root=%s" % options.root,
+        "rw",
+        "init=%s" % options.kernel_init,
+        "vmalloc=768MB",
+    ]
+
     root = Root(full_system=True)
-    disks = [default_disk] if len(options.disk)==0 else options.disk
-    system = createSystem(  options.caches,
-                            options.kernel,
-                            options.bootscript,
-                            options.machine_type,
-                            disks=disks,
-                            mem_size=options.mem_size,
-                            bootloader=options.bootloader)
+
+    disks = [default_disk] if len(options.disk) == 0 else options.disk
+    system = createSystem(options.caches,
+                          options.kernel,
+                          options.bootscript,
+                          options.machine_type,
+                          disks=disks,
+                          mem_size=options.mem_size,
+                          bootloader=options.bootloader)
 
     root.system = system
     if options.kernel_cmd:
@@ -170,11 +176,11 @@ def build(options):
         m5.util.panic("Empty CPU clusters")
 
     big_model, mid_model, little_model = cpu_types[options.cpu_type]
-    all_cpus = []
 
+    all_cpus = []
     if options.big_cpus > 0:
         system.bigCluster = big_model(system, options.big_cpus,
-                                    options.big_cpu_clock)
+                                      options.big_cpu_clock)
         system.mem_mode = system.bigCluster.memoryMode()
         all_cpus += system.bigCluster.cpus
 
@@ -186,14 +192,14 @@ def build(options):
 
     if options.little_cpus > 0:
         system.littleCluster = little_model(system, options.little_cpus,
-                                    options.little_cpu_clock)
-        ssytem.mem_mode = system.littleCluster.memoryMode()
+                                            options.little_cpu_clock)
+        system.mem_mode = system.littleCluster.memoryMode()
         all_cpus += system.littleCluster.cpus
 
 
     system.addCaches(options.caches)
     if not options.caches:
-        if options.big_cpus > 0 and system.bigCluster.requireCaches(): 
+        if options.big_cpus > 0 and system.bigCluster.requireCaches():
             m5.util.panic("Big CPU model requires caches")
         if options.mid_cpus > 0 and system.bigCluster.requireCaches(): 
             m5.util.panic("Mid CPU model requires caches")
@@ -234,6 +240,7 @@ def _build_kvm(system, cpus):
             cpu.eventq_index = first_cpu_eq + idx
 
 
+
 def instantiate(options, checkpoint_dir=None):
     # Setup the simulation quantum if we are running in PDES-mode
     # (e.g., when using KVM)
@@ -255,6 +262,7 @@ def instantiate(options, checkpoint_dir=None):
     else:
         m5.instantiate()
 
+
 def run(checkpoint_dir=m5.options.outdir):
     # start simulation (and drop checkpoints when requested)
     while True:
@@ -270,6 +278,7 @@ def run(checkpoint_dir=m5.options.outdir):
             break
 
     sys.exit(event.getCode())
+
 
 def main():
     parser = argparse.ArgumentParser(
