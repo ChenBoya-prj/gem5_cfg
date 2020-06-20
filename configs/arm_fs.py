@@ -25,6 +25,7 @@ default_kernel = 'vmlinux.vexpress_gem5_v1_64'
 default_rcs = 'bootscript.rcS'
 default_mem_size= "8GB"
 
+
 def _to_ticks(value):
     """Helper function to convert a latency from string format to Ticks"""
 
@@ -73,8 +74,29 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5_V1",
 
     return sys
 
+class BigCluster(arm_sys.CpuCluster):
+    def __init__(self, system, num_cpus, cpu_clock,
+                 cpu_voltage="1.0V"):
+        cpu_config = [ ObjectList.cpu_list.get("O3_ARM_v7a_3"),
+            arm_sys.L1I, arm_sys.L1D, arm_sys.WalkCache, arm_sys.L2 ]
+        super(BigCluster, self).__init__(system, num_cpus, cpu_clock,
+                                         cpu_voltage, *cpu_config)
+
+class LittleCluster(arm_sys.CpuCluster):
+    def __init__(self, system, num_cpus, cpu_clock,
+                 cpu_voltage="1.0V"):
+        cpu_config = [ ObjectList.cpu_list.get("MinorCPU"), arm_sys.L1I,
+            arm_sys.L1D, arm_sys.WalkCache, arm_sys.L2 ]
+        super(LittleCluster, self).__init__(system, num_cpus, cpu_clock,
+                                         cpu_voltage, *cpu_config)
+
+sw_cpu_types = {
+    "atomic" : ("AtomicSimpleCPU", "AtomicSimpleCPU", "AtomicSimpleCPU"),
+    "timing" : ("O3_ARM_v7a_3", "O3_ARM_v7a_3", "MinorCPU"),
+}
 cpu_types = {
     "atomic" : (AtomicCluster, AtomicCluster, AtomicCluster),
+    "timing" : (BigCluster, BigCluster, LittleCluster),
 }
 # Only add the KVM CPU if it has been compiled into gem5
 if arm_sys.have_kvm:
@@ -91,13 +113,17 @@ def addOptions(parser):
                         help="Specify the kernel CLI root= argument")
     parser.add_argument("--machine-type", type=str,
                         choices=ObjectList.platform_list.get_names(),
-                        default="VExpress_GEM5",
+                        default="VExpress_GEM5_V1",
                         help="Hardware platform class")
     parser.add_argument("--disk", action="append", type=str, default=[],
                         help="Disks to instantiate")
     parser.add_argument("--bootscript", type=str, default=default_rcs,
                         help="Linux bootscript")
     parser.add_argument("--cpu-type", type=str, choices=list(cpu_types.keys()),
+                        default="timing",
+                        help="CPU simulation mode. Default: %(default)s")
+    parser.add_argument("--fast-forward", action="store", type=str, default=None)
+    parser.add_argument("--sw-cpu-type", type=str, choices=list(cpu_types.keys()),
                         default="timing",
                         help="CPU simulation mode. Default: %(default)s")
     parser.add_argument("--kernel-init", type=str, default="/sbin/init",
@@ -176,25 +202,68 @@ def build(options):
         m5.util.panic("Empty CPU clusters")
 
     big_model, mid_model, little_model = cpu_types[options.cpu_type]
-
+    sw_big_cpu, sw_mid_cpu, sw_little_cpu = sw_cpu_types[options.sw_cpu_type]
     all_cpus = []
+    sw_all_cpus = []
+
     if options.big_cpus > 0:
         system.bigCluster = big_model(system, options.big_cpus,
                                       options.big_cpu_clock)
         system.mem_mode = system.bigCluster.memoryMode()
         all_cpus += system.bigCluster.cpus
 
+        cpu_class_tmp = ObjectList.cpu_list.get(sw_big_cpu)
+        big_sw_cpus = [ cpu_class_tmp(switched_out=True, cpu_id =(i))
+                        for i in range(options.big_cpus)]
+        for i in range(options.big_cpus):
+            if options.fast_forward:
+                system.bigCluster.cpus[i].max_insts_any_thread = int(options.fast_forward)
+            big_sw_cpus[i].system = system
+            big_sw_cpus[i].workload = system.bigCluster.cpus[i].workload
+            big_sw_cpus[i].clk_domain = system.bigCluster.cpus[i].clk_domain
+            big_sw_cpus[i].progress_interval = system.bigCluster.cpus[i].progress_interval
+            big_sw_cpus[i].isa = system.bigCluster.cpus[i].isa
+        system.bigCluster.switch_cpus = big_sw_cpus;
+
+
     if options.mid_cpus > 0:
         system.midCluster = mid_model(system, options.mid_cpus,
                                     options.mid_cpu_clock)
-        ssytem.mem_mode = system.midCluster.memoryMode()
+        system.mem_mode = system.midCluster.memoryMode()
         all_cpus += system.midCluster.cpus
+
+        cpu_class_tmp = ObjectList.cpu_list.get(sw_mid_cpu)
+        mid_sw_cpus = [ cpu_class_tmp(switched_out=True, cpu_id =(i+options.big_cpus))
+                        for i in range(options.mid_cpus)]
+        for i in range(options.mid_cpus):
+            if options.fast_forward:
+                system.midCluster.cpus[i].max_insts_any_thread = int(options.fast_forward)
+            mid_sw_cpus[i].system = system
+            mid_sw_cpus[i].workload = system.midCluster.cpus[i].workload
+            mid_sw_cpus[i].clk_domain = system.midCluster.cpus[i].clk_domain
+            mid_sw_cpus[i].progress_interval = system.midCluster.cpus[i].progress_interval
+            mid_sw_cpus[i].isa = system.midCluster.cpus[i].isa
+        system.midCluster.switch_cpus = mid_sw_cpus;
+
 
     if options.little_cpus > 0:
         system.littleCluster = little_model(system, options.little_cpus,
                                             options.little_cpu_clock)
         system.mem_mode = system.littleCluster.memoryMode()
         all_cpus += system.littleCluster.cpus
+
+        cpu_class_tmp = ObjectList.cpu_list.get(sw_little_cpu)
+        little_sw_cpus = [ cpu_class_tmp(switched_out=True, cpu_id =(i+options.big_cpus+options.mid_cpus))
+                        for i in range(options.little_cpus)]
+        for i in range(options.little_cpus):
+            if options.fast_forward:
+                system.littleCluster.cpus[i].max_insts_any_thread = int(options.fast_forward)
+            little_sw_cpus[i].system = system
+            little_sw_cpus[i].workload = system.littleCluster.cpus[i].workload
+            little_sw_cpus[i].clk_domain = system.littleCluster.cpus[i].clk_domain
+            little_sw_cpus[i].progress_interval = system.littleCluster.cpus[i].progress_interval
+            little_sw_cpus[i].isa = system.littleCluster.cpus[i].isa
+        system.littleCluster.switch_cpus = little_sw_cpus;
 
 
     system.addCaches(options.caches)
@@ -262,7 +331,8 @@ def instantiate(options, checkpoint_dir=None):
         m5.instantiate()
 
 
-def run(checkpoint_dir=m5.options.outdir):
+def run(root, options, checkpoint_dir=m5.options.outdir):
+
     # start simulation (and drop checkpoints when requested)
     while True:
         event = m5.simulate()
@@ -275,6 +345,24 @@ def run(checkpoint_dir=m5.options.outdir):
         else:
             print(exit_msg, " @ ", m5.curTick())
             break
+    switch_cpu_list = []
+    if  options.fast_forward:
+        if options.big_cpus:
+            sw_tmp_list = [( root.system.bigCluster.cpus[i], root.system.bigCluster.switch_cpus[i])
+                            for i in range(options.big_cpus)]
+            switch_cpu_list += sw_tmp_list
+        if options.mid_cpus:
+            sw_tmp_list = [( root.system.midCluster.cpus[i], root.system.midCluster.switch_cpus[i])
+                            for i in range(options.mid_cpus)]
+            switch_cpu_list += sw_tmp_list
+        if options.little_cpus:
+            sw_tmp_list = [( root.system.littleCluster.cpus[i], root.system.littleCluster.switch_cpus[i])
+                            for i in range(options.little_cpus)]
+            switch_cpu_list += sw_tmp_list
+        print("Shift CPU at tick %d" % m5.curTick())
+        m5.switchCpus(root.system, switch_cpu_list)
+        m5.stats.reset()
+        event = m5.simulate()
 
     sys.exit(event.getCode())
 
@@ -287,7 +375,7 @@ def main():
     root = build(options)
     root.apply_config(options.param)
     instantiate(options)
-    run()
+    run(root, options)
 
 
 if __name__ == "__m5_main__":

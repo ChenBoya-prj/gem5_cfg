@@ -164,8 +164,8 @@ class AtomicCluster(CpuCluster):
 
 class KvmCluster(CpuCluster):
     def __init__(self, system, num_cpus, cpu_clock, cpu_voltage="1.0V"):
-        cpu_config = [ ObjectList.cpu_list.get("ArmV8KvmCPU"), None, None,
-            None, None ]
+        cpu_config = [ ObjectList.cpu_list.get("ArmV8KvmCPU"), L1I, L1D,
+            WalkCache, L2]
         super(KvmCluster, self).__init__(system, num_cpus, cpu_clock,
                                          cpu_voltage, *cpu_config)
     def addL1L2(self):
